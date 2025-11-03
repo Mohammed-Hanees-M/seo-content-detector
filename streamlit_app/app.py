@@ -10,9 +10,6 @@ from collections import Counter
 import os  # For path checks
 import pandas as pd  # For CSV/export/table
 import plotly.express as px  # For charts
-import nltk
-from nltk import pos_tag, word_tokenize
-from nltk.corpus import stopwords
 import string
 
 
@@ -20,27 +17,40 @@ import string
 st.set_page_config(page_title="SEO Content Analyzer Pro", layout="wide", page_icon="🔍")
 
 
-# NLTK initialization (downloads all required data on first run, cached)
+# Semantic keywords via NLTK (lazy-loaded: imports/downloads only on first use)
 @st.cache_data
-def init_nltk():
-    try:
-        nltk.data.find('tokenizers/punkt')
-        nltk.data.find('taggers/averaged_perceptron_tagger')
-        nltk.data.find('corpora/stopwords')
-        nltk.data.find('corpora/wordnet')
-        nltk.data.find('corpora/omw-1.4')
-    except LookupError:
-        nltk.download('punkt', quiet=True)
-        nltk.download('averaged_perceptron_tagger', quiet=True)
-        nltk.download('stopwords', quiet=True)
-        nltk.download('wordnet', quiet=True)  # Required for NLTK stem/wordnet init on cloud
-        nltk.download('omw-1.4', quiet=True)  # Open Multilingual Wordnet (dependency)
-init_nltk()
-
-# Semantic keywords via NLTK (noun extraction)
 def extract_semantics(text, max_keywords=5):
     if not text:
         return []
+    
+    # Lazy NLTK init: Download only if needed (avoids import-time error on cloud)
+    if not hasattr(extract_semantics, 'nltk_loaded'):
+        try:
+            import nltk
+            from nltk import pos_tag, word_tokenize
+            from nltk.corpus import stopwords
+            
+            # Check and download required data (cached across runs)
+            for resource in ['punkt', 'averaged_perceptron_tagger', 'stopwords', 'wordnet', 'omw-1.4']:
+                try:
+                    nltk.data.find(f'tokenizers/{resource}' if resource == 'punkt' else f'taggers/{resource}' if resource == 'averaged_perceptron_tagger' else f'corpora/{resource}')
+                except LookupError:
+                    nltk.download(resource, quiet=True)
+            
+            extract_semantics.nltk_pos_tag = pos_tag
+            extract_semantics.nltk_word_tokenize = word_tokenize
+            extract_semantics.nltk_stopwords = stopwords
+            extract_semantics.nltk_loaded = True
+            st.info("📥 NLTK data downloaded (one-time; cached now).")  # User-friendly notice on first run
+        except Exception as e:
+            st.error(f"NLTK init failed: {e}. Using basic keyword extraction.")
+            return []  # Graceful fallback: Empty semantics
+    
+    # Use cached imports
+    word_tokenize = extract_semantics.nltk_word_tokenize
+    pos_tag = extract_semantics.nltk_pos_tag
+    stopwords = extract_semantics.nltk_stopwords
+    
     tokens = word_tokenize(text.lower())
     stop_words = set(stopwords.words('english'))
     tokens = [w for w in tokens if w not in string.punctuation and w not in stop_words]
@@ -324,7 +334,7 @@ if analyze or batch_mode:
     elif batch_mode and not batch_urls:
         st.error("❌ Please add at least one valid URL in batch mode.")
     else:
-        with st.spinner("🔄 Scraping and analyzing... This may take 10-20 seconds per URL."):
+        with st.spinner("🔄 Scraping and analyzing... This may take 10-20 seconds per URL (first run downloads NLP data)."):
             progress_bar = st.progress(0.0)
             results = []
             urls_to_process = [url] if analyze and url and not batch_mode else batch_urls
@@ -343,7 +353,7 @@ if analyze or batch_mode:
                     text = text[:max_words]  # Truncate
                     wc, read = get_features(text)
                     keywords = extract_keywords(text)
-                    semantics = extract_semantics(text)  # Updated: NLTK-based
+                    semantics = extract_semantics(text)  # Lazy NLTK: Downloads here if needed
                     features = np.array([[wc, read]])
                     probs = model.predict_proba(features)[0]
                     quality_idx = np.argmax(probs)
@@ -411,7 +421,7 @@ if analyze or batch_mode:
                         st.write("**Related Nouns:** " + " | ".join(semantics))
                         st.caption("Extracted via NLTK for topical authority (e.g., LSI keywords).")
                     else:
-                        st.info("No semantics found.")
+                        st.info("No semantics found (or fallback active).")
                 
                 # Thin content alert
                 if thin:
