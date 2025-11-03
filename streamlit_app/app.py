@@ -10,31 +10,40 @@ from collections import Counter
 import os  # For path checks
 import pandas as pd  # For CSV/export/table
 import plotly.express as px  # For charts
-import spacy  # For semantics; run: python -m spacy download en_core_web_sm
+import nltk
+from nltk import pos_tag, word_tokenize
+from nltk.corpus import stopwords
+import string
 
 
-# Load spacy once (cache)
-@st.cache_resource
-def load_spacy():
-    return spacy.load("en_core_web_sm")
-
-
-# Custom CSS for professional theme (enhanced for dark mode)
-st.markdown("""
-    <style>
-    .main {background-color: #f0f2f6;}
-    .stMetric {background-color: white; border-radius: 10px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
-    .high {color: #10B981; font-weight: bold;}
-    .medium {color: #F59E0B; font-weight: bold;}
-    .low {color: #EF4444; font-weight: bold;}
-    .metric-label {font-size: 0.9em; color: gray;}
-    [data-testid="stSidebar"] {background-color: #f8f9fa;}
-    </style>
-""", unsafe_allow_html=True)
-
-
-# Config for wide, professional layout
+# Config for wide, professional layout (MUST be first Streamlit command)
 st.set_page_config(page_title="SEO Content Analyzer Pro", layout="wide", page_icon="🔍")
+
+
+# NLTK initialization (downloads data on first run, cached)
+@st.cache_data
+def init_nltk():
+    try:
+        nltk.data.find('tokenizers/punkt')
+        nltk.data.find('taggers/averaged_perceptron_tagger')
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('punkt', quiet=True)
+        nltk.download('averaged_perceptron_tagger', quiet=True)
+        nltk.download('stopwords', quiet=True)
+init_nltk()
+
+# Semantic keywords via NLTK (noun extraction)
+def extract_semantics(text, max_keywords=5):
+    if not text:
+        return []
+    tokens = word_tokenize(text.lower())
+    stop_words = set(stopwords.words('english'))
+    tokens = [w for w in tokens if w not in string.punctuation and w not in stop_words]
+    pos_tags = pos_tag(tokens)
+    nouns = [word for word, tag in pos_tags if tag.startswith('NN')]
+    counter = Counter(nouns)
+    return [word for word, _ in counter.most_common(max_keywords)]
 
 
 # Load or init model (robust fallback for corruption/no file)
@@ -96,15 +105,6 @@ def extract_keywords(text):
     return [word for word, _ in common]
 
 
-# Semantic keywords via spaCy
-def extract_semantics(text, nlp):
-    if not text:
-        return []
-    doc = nlp(text[:2000])  # Limit for speed
-    semantics = [token.text for token in doc if token.pos_ in ["NOUN", "ADJ"] and len(token.text) > 4]
-    return list(set(semantics))[:5]  # Unique top 5
-
-
 # Feature extraction (wc, readability)
 def get_features(text):
     if not text:
@@ -112,6 +112,20 @@ def get_features(text):
     wc = len(re.findall(r'\w+', text))  # Robust word count
     read = textstat.flesch_reading_ease(text[:2000]) if wc > 10 else 0  # Limit for speed/clamp
     return wc, read
+
+
+# Custom CSS for professional theme (enhanced for dark mode)
+st.markdown("""
+    <style>
+    .main {background-color: #f0f2f6;}
+    .stMetric {background-color: white; border-radius: 10px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+    .high {color: #10B981; font-weight: bold;}
+    .medium {color: #F59E0B; font-weight: bold;}
+    .low {color: #EF4444; font-weight: bold;}
+    .metric-label {font-size: 0.9em; color: gray;}
+    [data-testid="stSidebar"] {background-color: #f8f9fa;}
+    </style>
+""", unsafe_allow_html=True)
 
 
 # Header
@@ -325,8 +339,7 @@ if analyze or batch_mode:
                     text = text[:max_words]  # Truncate
                     wc, read = get_features(text)
                     keywords = extract_keywords(text)
-                    nlp = load_spacy()  # Cached
-                    semantics = extract_semantics(text, nlp)  # New: Medium semantics
+                    semantics = extract_semantics(text)  # Updated: NLTK-based
                     features = np.array([[wc, read]])
                     probs = model.predict_proba(features)[0]
                     quality_idx = np.argmax(probs)
@@ -391,8 +404,8 @@ if analyze or batch_mode:
                 # Medium: New Semantics Expander
                 with st.expander("🔬 Semantic Terms (NLP Insights)", expanded=False):
                     if semantics:
-                        st.write("**Related Nouns/Adjs:** " + " | ".join(semantics))
-                        st.caption("Extracted via spaCy for topical authority (e.g., LSI keywords).")
+                        st.write("**Related Nouns:** " + " | ".join(semantics))
+                        st.caption("Extracted via NLTK for topical authority (e.g., LSI keywords).")
                     else:
                         st.info("No semantics found.")
                 
