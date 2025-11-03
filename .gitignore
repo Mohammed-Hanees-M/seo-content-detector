@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtualenv
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+.ipynb_checkpoints
+
+# Data (large files)
+data/*.csv  # Uncomment if CSVs are too big for Git; but keep for submission
+
+# IDE
+.vscode/settings.json
+.vs/
+.idea/
