@@ -20,17 +20,21 @@ import string
 st.set_page_config(page_title="SEO Content Analyzer Pro", layout="wide", page_icon="🔍")
 
 
-# NLTK initialization (downloads data on first run, cached)
+# NLTK initialization (downloads all required data on first run, cached)
 @st.cache_data
 def init_nltk():
     try:
         nltk.data.find('tokenizers/punkt')
         nltk.data.find('taggers/averaged_perceptron_tagger')
         nltk.data.find('corpora/stopwords')
+        nltk.data.find('corpora/wordnet')
+        nltk.data.find('corpora/omw-1.4')
     except LookupError:
         nltk.download('punkt', quiet=True)
         nltk.download('averaged_perceptron_tagger', quiet=True)
         nltk.download('stopwords', quiet=True)
+        nltk.download('wordnet', quiet=True)  # Required for NLTK stem/wordnet init on cloud
+        nltk.download('omw-1.4', quiet=True)  # Open Multilingual Wordnet (dependency)
 init_nltk()
 
 # Semantic keywords via NLTK (noun extraction)
