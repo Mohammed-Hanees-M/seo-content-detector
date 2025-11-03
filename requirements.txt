@@ -6,5 +6,4 @@ joblib==1.4.2
 numpy==1.26.4
 pandas==2.2.3
 plotly==5.22.0
-spacy==3.8.7
-https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
+nltk==3.9.0
